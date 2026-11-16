@@ -1,0 +1,17 @@
+TunWork is a recruitment platform designed to connect candidates
+with companies.
+
+Candidates can create an account and build their professional CV.
+
+Candidates can search for job offers based on different criteria.
+
+Candidates can apply for available job offers.
+
+Companies can create an account and publish job offers.
+
+Companies can manage their published offers.
+
+Companies can view statistics related to their job offers.
+
+TunWork also provides AI-based assistance for recruitment and
+communication between candidates and companies.
