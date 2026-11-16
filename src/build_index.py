@@ -1,112 +1,50 @@
 from pathlib import Path
-
 from pypdf import PdfReader
-
-from chunking import create_chunks
-from embeddings import (
-    create_embedding_model,
-    create_embeddings
-)
-from vector_store import save_vector_store
-
+from src.chunking import create_chunks
+from src.embeddings import create_embedding_model, create_embeddings
+from src.vector_store import save_vector_store
 
 DOCUMENTS_DIR = Path("data/documents")
+SUPPORTED = {".txt", ".md", ".markdown", ".pdf", ".docx"}
 
 
-def load_documents():
-
+def extract_documents(directory=DOCUMENTS_DIR):
     documents = []
-
-    for file_path in DOCUMENTS_DIR.iterdir():
-
-        # =========================
-        # TXT
-        # =========================
-        if file_path.suffix.lower() == ".txt":
-
-            print(f"Loading TXT: {file_path}")
-
-            text = file_path.read_text(
-                encoding="utf-8"
-            )
-
-            documents.append({
-                "source": file_path.name,
-                "text": text
-            })
-
-        # =========================
-        # PDF
-        # =========================
-        elif file_path.suffix.lower() == ".pdf":
-
-            print(f"Loading PDF: {file_path}")
-
-            reader = PdfReader(file_path)
-
-            for page_number, page in enumerate(
-                reader.pages,
-                start=1
-            ):
-
-                text = page.extract_text()
-
-                if text:
-
-                    documents.append({
-                        "source": (
-                            f"{file_path.name} "
-                            f"— page {page_number}"
-                        ),
-                        "text": text
-                    })
-
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    for path in sorted(directory.iterdir()):
+        if not path.is_file() or path.suffix.lower() not in SUPPORTED:
+            continue
+        try:
+            if path.suffix.lower() == ".pdf":
+                for page_no, page in enumerate(PdfReader(str(path)).pages, start=1):
+                    text = page.extract_text() or ""
+                    if text.strip():
+                        documents.append({"text": text, "source": {"name": path.name, "page": page_no, "type": "pdf"}})
+            elif path.suffix.lower() == ".docx":
+                from docx import Document
+                text = "\n".join(p.text for p in Document(str(path)).paragraphs)
+                if text.strip(): documents.append({"text": text, "source": {"name": path.name, "page": None, "type": "docx"}})
+            else:
+                text = path.read_text(encoding="utf-8-sig", errors="replace")
+                if text.strip(): documents.append({"text": text, "source": {"name": path.name, "page": None, "type": path.suffix[1:]}})
+        except Exception as exc:
+            print(f"Skipping {path.name}: {exc}")
     return documents
 
 
-def build_index():
-
-    documents = load_documents()
-
-    all_chunks = []
-    all_sources = []
-
-    for document in documents:
-
-        chunks = create_chunks(
-            document["text"],
-            chunk_size=300
-        )
-
-        all_chunks.extend(chunks)
-
-        all_sources.extend(
-            [document["source"]] * len(chunks)
-        )
-
-    print(
-        "Number of chunks:",
-        len(all_chunks)
-    )
-
+def build_index(directory=DOCUMENTS_DIR, output=None, chunk_size=900, overlap=120):
+    entries = []
+    for doc in extract_documents(directory):
+        for n, chunk in enumerate(create_chunks(doc["text"], chunk_size, overlap)):
+            entries.append((chunk, {**doc["source"], "chunk": n + 1}))
+    if not entries:
+        raise ValueError(f"No readable documents found in {directory}")
     model = create_embedding_model()
-
-    embeddings = create_embeddings(
-        model,
-        all_chunks
-    )
-
-    print(
-        "Embeddings shape:",
-        embeddings.shape
-    )
-
-    save_vector_store(
-        all_chunks,
-        embeddings,
-        all_sources
-    )
+    vectors = create_embeddings(model, [entry[0] for entry in entries])
+    save_vector_store([e[0] for e in entries], vectors, [e[1] for e in entries], output) if output else save_vector_store([e[0] for e in entries], vectors, [e[1] for e in entries])
+    return len(entries)
 
 
 if __name__ == "__main__":
-    build_index()
+    print(f"Indexed {build_index()} chunks")

@@ -25,13 +25,16 @@ def print_sources(results):
 
     for result in results:
         source = result["source"]
+        label = source if isinstance(source, str) else source.get("name", "Unknown")
+        if result.get("page"):
+            label += f", page {result['page']}"
 
-        if source not in seen:
+        if label not in seen:
             print(
-                f"  • {source} "
+                f"  • {label} "
                 f"(similarity: {result['score']:.3f})"
             )
-            seen.add(source)
+            seen.add(label)
 
 
 def main():
@@ -86,7 +89,8 @@ def main():
             answer, results = ask(
                 question,
                 embedding_model,
-                top_k=3
+                top_k=5,
+                history=conversation
             )
 
             last_results = results

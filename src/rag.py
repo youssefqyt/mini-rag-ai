@@ -3,41 +3,11 @@ from src.llm import generate_answer
 
 
 def build_context(results):
-
-    context_parts = []
-
-    for result in results:
-        context_parts.append(
-            result["chunk"]
-        )
-
-    return "\n\n".join(context_parts)
+    return "\n\n".join(f"[{i}] {r['source']}" + (f", page {r['page']}" if r.get("page") else "") + f"\n{r['chunk']}" for i, r in enumerate(results, 1))
 
 
-def ask(question, model, top_k=3):
-
-    # 1. Retrieve
-    results = retrieve(
-        question,
-        model,
-        top_k=top_k
-    )
-
-    # 2. No relevant information
+def ask(question, model, top_k=5, history=None, min_score=0.12):
+    results = retrieve(question, model, top_k=top_k, min_score=min_score)
     if not results:
-        return (
-            "I don't have enough information "
-            "in the provided documents.",
-            []
-        )
-
-    # 3. Build context
-    context = build_context(results)
-
-    # 4. Send context + question to LLM
-    answer = generate_answer(
-        question,
-        context
-    )
-
-    return answer, results
+        return "I couldn't find sufficiently relevant information in the indexed documents.", []
+    return generate_answer(question, build_context(results), history), results

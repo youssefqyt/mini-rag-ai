@@ -2,3 +2,6 @@
 __pycache__/
 .env
 data/vector_store.json
+data/app.sqlite3
+test-index.tmp.json
+tests/tmp*/
